@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/fetch-stablecoins",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/fetch-exchange-flows",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/compute-regime",
+      "schedule": "15 * * * *"
+    }
+  ]
+}

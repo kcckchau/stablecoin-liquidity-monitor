@@ -1,0 +1,60 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model StablecoinSupply {
+  id          String   @id @default(cuid())
+  symbol      String   // e.g., "USDT", "USDC", "DAI"
+  name        String   // e.g., "Tether", "USD Coin"
+  supply      Decimal  @db.Decimal(30, 2) // Total supply in tokens
+  marketCap   Decimal  @db.Decimal(30, 2) // Market cap in USD
+  timestamp   DateTime
+  source      String   // e.g., "defillama"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([symbol, timestamp])
+  @@index([symbol, timestamp])
+  @@index([timestamp])
+}
+
+model ExchangeFlow {
+  id            String   @id @default(cuid())
+  exchange      String   // e.g., "binance", "coinbase"
+  token         String   // e.g., "USDT", "USDC"
+  flowType      String   // "inflow" or "outflow"
+  amount        Decimal  @db.Decimal(30, 2) // Amount in tokens
+  amountUsd     Decimal  @db.Decimal(30, 2) // Amount in USD
+  timestamp     DateTime
+  source        String   // e.g., "cryptoquant", "glassnode"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([exchange, token, timestamp])
+  @@index([timestamp])
+}
+
+model LiquidityRegime {
+  id                String   @id @default(cuid())
+  regime            String   // e.g., "expansion", "contraction", "neutral"
+  score             Decimal  @db.Decimal(10, 4) // Composite score
+  supplyTrend       String   // "increasing", "decreasing", "stable"
+  flowTrend         String   // "net_inflow", "net_outflow", "neutral"
+  volatility        Decimal  @db.Decimal(10, 4)
+  confidence        Decimal  @db.Decimal(5, 4) // 0-1 confidence score
+  timestamp         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([timestamp])
+  @@index([timestamp])
+  @@index([regime, timestamp])
+}
