@@ -22,11 +22,13 @@ export const SPACING = {
  * Layout Constants from Design Tokens
  */
 export const LAYOUT = {
+  SIDEBAR_WIDTH: 256, // 16rem / w-64
   SECTION_SPACING: 32,
   CARD_PADDING_MIN: 16,
   CARD_PADDING_MAX: 20,
   GRID_GAP_MIN: 16,
   GRID_GAP_MAX: 24,
+  CONTENT_MAX_WIDTH: 1600,
 } as const;
 
 /**

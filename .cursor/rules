@@ -25,3 +25,5 @@ Prefer composition-based page structure over large monolithic page files.
 Keep styling consistent with the defined design tokens.
 
 Do not add extra features outside the current task.
+
+Use pnpm

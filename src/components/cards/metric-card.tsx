@@ -31,18 +31,18 @@ export function MetricCard({
   };
 
   return (
-    <div className="border rounded-lg p-6 bg-white shadow-sm">
-      <h4 className="text-sm font-medium text-gray-600 mb-2">{title}</h4>
-      <p className="text-3xl font-bold mb-2">{formatValue(value)}</p>
+    <div className="border border-border rounded-lg p-lg bg-surface">
+      <h4 className="text-sm font-medium text-foreground-muted mb-sm">{title}</h4>
+      <p className="text-3xl font-bold metric-value text-foreground mb-sm">{formatValue(value)}</p>
       
       {change !== undefined && (
-        <div className={`text-sm font-medium ${change >= 0 ? "text-green-600" : "text-red-600"}`}>
+        <div className={`text-sm font-medium ${change >= 0 ? "text-positive" : "text-negative"}`}>
           {formatPercentage(change)} {subtitle || ""}
         </div>
       )}
 
       {subtitle && change === undefined && (
-        <p className="text-sm text-gray-500">{subtitle}</p>
+        <p className="text-sm text-foreground-subtle">{subtitle}</p>
       )}
     </div>
   );

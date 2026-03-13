@@ -9,9 +9,9 @@ interface SignalSummaryProps {
 export function SignalSummary({ signals }: SignalSummaryProps) {
   if (!signals || signals.length === 0) {
     return (
-      <div className="border rounded-lg p-6 bg-white shadow-sm">
-        <h3 className="text-lg font-semibold mb-4">Market Signals</h3>
-        <p className="text-gray-500">No signals available</p>
+      <div className="border border-border rounded-lg p-lg bg-surface">
+        <h3 className="text-lg font-semibold text-foreground mb-md">Market Signals</h3>
+        <p className="text-foreground-subtle">No signals available</p>
       </div>
     );
   }
@@ -19,41 +19,41 @@ export function SignalSummary({ signals }: SignalSummaryProps) {
   const getSignalColor = (type: RegimeSignal["type"]) => {
     switch (type) {
       case "bullish":
-        return "text-green-700 bg-green-50 border-green-200";
+        return "text-positive bg-positive-surface border-positive";
       case "bearish":
-        return "text-red-700 bg-red-50 border-red-200";
+        return "text-negative bg-negative-surface border-negative";
       case "neutral":
-        return "text-gray-700 bg-gray-50 border-gray-200";
+        return "text-foreground bg-surface-muted border-border";
       default:
-        return "text-gray-700 bg-gray-50 border-gray-200";
+        return "text-foreground bg-surface-muted border-border";
     }
   };
 
   const getStrengthBadge = (strength: RegimeSignal["strength"]) => {
-    const baseClasses = "px-2 py-1 text-xs font-medium rounded";
+    const baseClasses = "px-sm py-xs text-xs font-medium rounded";
     switch (strength) {
       case "strong":
-        return `${baseClasses} bg-purple-100 text-purple-700`;
+        return `${baseClasses} bg-accent-surface text-accent`;
       case "moderate":
-        return `${baseClasses} bg-blue-100 text-blue-700`;
+        return `${baseClasses} bg-accent-surface text-accent`;
       case "weak":
-        return `${baseClasses} bg-gray-100 text-gray-700`;
+        return `${baseClasses} bg-surface-muted text-foreground-muted`;
       default:
-        return `${baseClasses} bg-gray-100 text-gray-700`;
+        return `${baseClasses} bg-surface-muted text-foreground-muted`;
     }
   };
 
   return (
-    <div className="border rounded-lg p-6 bg-white shadow-sm">
-      <h3 className="text-lg font-semibold mb-4">Market Signals</h3>
+    <div className="border border-border rounded-lg p-lg bg-surface">
+      <h3 className="text-lg font-semibold text-foreground mb-md">Market Signals</h3>
       
-      <div className="space-y-3">
+      <div className="space-y-sm">
         {signals.map((signal, index) => (
           <div
             key={index}
-            className={`border rounded-lg p-4 ${getSignalColor(signal.type)}`}
+            className={`border rounded-md p-md ${getSignalColor(signal.type)}`}
           >
-            <div className="flex items-start justify-between mb-2">
+            <div className="flex items-start justify-between mb-sm">
               <span className="font-medium capitalize">{signal.type}</span>
               <span className={getStrengthBadge(signal.strength)}>
                 {signal.strength}
