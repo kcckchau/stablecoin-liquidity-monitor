@@ -1,0 +1,27 @@
+# Cursor Project Rules
+
+Use docs/README.md as the entry point for project context.
+
+Always follow docs/tasks.md when implementing features.
+
+Do not implement future tasks unless explicitly instructed.
+
+Do not invent new architecture without checking docs/architecture.md.
+
+Follow docs/ui-spec.md for overall UI direction and visual style.
+
+Follow docs/design-tokens.md for colors, spacing, typography, surfaces, and component styling.
+
+Follow docs/wireframe-spec.md for dashboard layout, section hierarchy, and page composition.
+
+Prefer small focused reusable components.
+
+Avoid mixing data fetching and page layout logic.
+
+Do not place business logic inside UI components.
+
+Prefer composition-based page structure over large monolithic page files.
+
+Keep styling consistent with the defined design tokens.
+
+Do not add extra features outside the current task.
