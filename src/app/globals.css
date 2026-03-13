@@ -1,3 +1,118 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* 
+     * Design Tokens: Stablecoin Liquidity Monitor
+     * Dark-first, analytical dashboard theme
+     * Using HSL for better color manipulation
+     */
+
+    /* Background Layers */
+    --background: 222 15% 8%;           /* Very dark neutral - app background */
+    --surface: 222 13% 11%;             /* Slightly lighter - card surface */
+    --surface-muted: 222 12% 14%;       /* Muted surface - nested panels */
+    
+    /* Borders */
+    --border: 222 10% 20%;              /* Low contrast gray border */
+    --border-subtle: 222 10% 16%;       /* Even more subtle border */
+    
+    /* Text / Foreground */
+    --foreground: 222 10% 95%;          /* Near-white - primary text */
+    --foreground-muted: 222 8% 65%;     /* Muted gray - secondary text */
+    --foreground-subtle: 222 8% 50%;    /* Subtle gray - metadata/labels */
+    
+    /* Semantic Colors */
+    --positive: 142 45% 45%;            /* Muted green - improving metrics */
+    --positive-foreground: 142 45% 95%; /* Text on positive background */
+    
+    --negative: 0 45% 50%;              /* Muted red - declining metrics */
+    --negative-foreground: 0 45% 95%;   /* Text on negative background */
+    
+    --warning: 38 92% 50%;              /* Amber - caution signals */
+    --warning-foreground: 38 92% 10%;   /* Text on warning background */
+    
+    --accent: 210 70% 55%;              /* Cool blue - highlights/active */
+    --accent-foreground: 210 70% 98%;   /* Text on accent background */
+    
+    /* Semantic Surface Variants */
+    --positive-surface: 142 35% 15%;    /* Positive background variant */
+    --negative-surface: 0 35% 15%;      /* Negative background variant */
+    --warning-surface: 38 50% 15%;      /* Warning background variant */
+    --accent-surface: 210 50% 15%;      /* Accent background variant */
+    
+    /* Chart Colors */
+    --chart-1: 210 70% 55%;             /* Primary chart color (cool blue) */
+    --chart-2: 142 45% 45%;             /* Secondary chart color (green) */
+    --chart-3: 38 92% 50%;              /* Tertiary chart color (amber) */
+    --chart-4: 280 55% 55%;             /* Quaternary chart color (purple) */
+    --chart-5: 0 45% 50%;               /* Quinary chart color (red) */
+    
+    /* Radius */
+    --radius-sm: 0.5rem;                /* 8px - buttons */
+    --radius-md: 0.75rem;               /* 12px - default */
+    --radius-lg: 1rem;                  /* 16px - cards/panels */
+    --radius-xl: 1.5rem;                /* 24px - large containers */
+  }
+  
+  /* Light theme (if needed in future) */
+  .light {
+    --background: 0 0% 98%;
+    --surface: 0 0% 100%;
+    --surface-muted: 0 0% 96%;
+    
+    --border: 222 10% 85%;
+    --border-subtle: 222 10% 90%;
+    
+    --foreground: 222 15% 10%;
+    --foreground-muted: 222 8% 40%;
+    --foreground-subtle: 222 8% 55%;
+    
+    --positive: 142 50% 40%;
+    --positive-foreground: 142 50% 98%;
+    
+    --negative: 0 50% 45%;
+    --negative-foreground: 0 50% 98%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 10%;
+    
+    --accent: 210 80% 45%;
+    --accent-foreground: 210 80% 98%;
+    
+    --positive-surface: 142 40% 92%;
+    --negative-surface: 0 40% 92%;
+    --warning-surface: 38 60% 92%;
+    --accent-surface: 210 60% 92%;
+    
+    --chart-1: 210 80% 45%;
+    --chart-2: 142 50% 40%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 280 60% 50%;
+    --chart-5: 0 50% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* Typography defaults */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-foreground font-semibold;
+  }
+  
+  /* Ensure consistent number rendering for metrics */
+  .metric-value {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
