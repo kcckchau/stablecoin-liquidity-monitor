@@ -1,64 +1,167 @@
-import { env } from "@/config/env";
-
 /**
  * DefiLlama API client for fetching stablecoin data
  * Documentation: https://defillama.com/docs/api
+ * 
+ * DefiLlama provides free public APIs for stablecoin data
+ * No API key required for basic usage
  */
 
-export interface DefiLlamaStablecoinResponse {
+const DEFILLAMA_BASE_URL = "https://stablecoins.llama.fi";
+
+// Response types from DefiLlama API
+interface DefiLlamaStablecoin {
   id: string;
   name: string;
   symbol: string;
-  circulating: number;
+  gecko_id?: string;
+  pegType?: string;
+  priceSource?: string;
+  pegMechanism?: string;
+  circulating?: {
+    peggedUSD?: number;
+  };
+  price?: number;
+  chains?: string[];
+}
+
+interface DefiLlamaStablecoinsResponse {
+  peggedAssets: DefiLlamaStablecoin[];
+}
+
+interface DefiLlamaChartPoint {
+  date: number; // Unix timestamp
+  totalCirculating: {
+    peggedUSD: number;
+  };
+}
+
+interface DefiLlamaChartResponse {
+  [key: string]: DefiLlamaChartPoint[];
+}
+
+export interface StablecoinSupply {
+  id: string;
+  name: string;
+  symbol: string;
+  circulating: number; // Total supply in USD
   price: number;
-  // Add other fields as needed
+  chains: string[];
 }
 
-export async function fetchStablecoinSupplies(): Promise<DefiLlamaStablecoinResponse[]> {
-  // TODO: Implement actual DefiLlama API integration
-  console.log("Fetching stablecoin supplies from DefiLlama...");
+/**
+ * Fetch current stablecoin supplies from DefiLlama
+ * Focuses on major stablecoins: USDT, USDC, DAI
+ */
+export async function fetchStablecoinSupplies(): Promise<StablecoinSupply[]> {
+  try {
+    const response = await fetch(`${DEFILLAMA_BASE_URL}/stablecoins?includePrices=true`, {
+      headers: {
+        "Accept": "application/json",
+      },
+      next: { revalidate: 3600 }, // Cache for 1 hour
+    });
 
-  // Placeholder mock data
-  return [
-    {
-      id: "1",
-      name: "Tether",
-      symbol: "USDT",
-      circulating: 95000000000,
-      price: 1.0,
-    },
-    {
-      id: "2",
-      name: "USD Coin",
-      symbol: "USDC",
-      circulating: 42000000000,
-      price: 1.0,
-    },
-    {
-      id: "3",
-      name: "Dai",
-      symbol: "DAI",
-      circulating: 5200000000,
-      price: 1.0,
-    },
-  ];
+    if (!response.ok) {
+      throw new Error(`DefiLlama API error: ${response.status} ${response.statusText}`);
+    }
 
-  // Real implementation would look like:
-  // const response = await fetch("https://stablecoins.llama.fi/stablecoins", {
-  //   headers: {
-  //     "Authorization": `Bearer ${env.DEFILLAMA_API_KEY}`
-  //   }
-  // });
-  // return response.json();
+    const data: DefiLlamaStablecoinsResponse = await response.json();
+
+    // Filter for major stablecoins we care about
+    const targetSymbols = ["USDT", "USDC", "DAI"];
+    const stablecoins = data.peggedAssets
+      .filter(coin => targetSymbols.includes(coin.symbol))
+      .map(coin => ({
+        id: coin.id,
+        name: coin.name,
+        symbol: coin.symbol,
+        circulating: coin.circulating?.peggedUSD || 0,
+        price: coin.price || 1.0,
+        chains: coin.chains || [],
+      }));
+
+    console.log(`✓ Fetched ${stablecoins.length} stablecoins from DefiLlama`);
+    return stablecoins;
+
+  } catch (error) {
+    console.error("Error fetching stablecoin supplies from DefiLlama:", error);
+    throw error;
+  }
 }
 
+/**
+ * Fetch historical supply data for a specific stablecoin
+ * @param stablecoinId - DefiLlama stablecoin ID (e.g., "1" for USDT)
+ * @param days - Number of days of history to fetch (default: 90)
+ */
 export async function fetchHistoricalSupply(
-  symbol: string,
-  startDate: Date,
-  endDate: Date
+  stablecoinId: string,
+  days: number = 90
 ): Promise<Array<{ timestamp: Date; supply: number }>> {
-  // TODO: Implement historical data fetching
-  console.log(`Fetching historical supply for ${symbol} from ${startDate} to ${endDate}`);
+  try {
+    const response = await fetch(`${DEFILLAMA_BASE_URL}/stablecoincharts/all?stablecoin=${stablecoinId}`, {
+      headers: {
+        "Accept": "application/json",
+      },
+      next: { revalidate: 3600 }, // Cache for 1 hour
+    });
 
-  return [];
+    if (!response.ok) {
+      throw new Error(`DefiLlama API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: DefiLlamaChartPoint[] = await response.json();
+
+    // Convert to our internal format and filter by date range
+    const cutoffDate = Date.now() / 1000 - (days * 24 * 60 * 60);
+    const historicalData = data
+      .filter(point => point.date >= cutoffDate)
+      .map(point => ({
+        timestamp: new Date(point.date * 1000),
+        supply: point.totalCirculating.peggedUSD,
+      }))
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+    console.log(`✓ Fetched ${historicalData.length} historical data points for stablecoin ${stablecoinId}`);
+    return historicalData;
+
+  } catch (error) {
+    console.error(`Error fetching historical supply for stablecoin ${stablecoinId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch historical supply for all major stablecoins
+ * Returns aggregated data for USDT, USDC, DAI
+ */
+export async function fetchAllHistoricalSupplies(days: number = 90): Promise<Map<string, Array<{ timestamp: Date; supply: number }>>> {
+  try {
+    // DefiLlama stablecoin IDs (these are stable identifiers)
+    const stablecoinIds = {
+      "USDT": "1",
+      "USDC": "2", 
+      "DAI": "3",
+    };
+
+    const results = new Map<string, Array<{ timestamp: Date; supply: number }>>();
+
+    // Fetch historical data for each stablecoin
+    for (const [symbol, id] of Object.entries(stablecoinIds)) {
+      try {
+        const history = await fetchHistoricalSupply(id, days);
+        results.set(symbol, history);
+      } catch (error) {
+        console.error(`Failed to fetch history for ${symbol}:`, error);
+        // Continue with other stablecoins even if one fails
+        results.set(symbol, []);
+      }
+    }
+
+    return results;
+
+  } catch (error) {
+    console.error("Error fetching all historical supplies:", error);
+    throw error;
+  }
 }

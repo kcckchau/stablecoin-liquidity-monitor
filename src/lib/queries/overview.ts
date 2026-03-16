@@ -6,73 +6,284 @@ import { AggregatedSupply, AggregatedFlow } from "@/types/market-data";
  * Database queries for overview/dashboard data
  */
 
+/**
+ * Get the total stablecoin supply across all major stablecoins
+ * Uses the most recent data point for each stablecoin
+ */
 export async function getTotalStablecoinSupply(): Promise<number> {
-  // TODO: Implement actual query
-  // Get the latest supply data for each stablecoin and sum them
-  console.log("Querying total stablecoin supply...");
+  try {
+    // Get the latest timestamp for each symbol
+    const latestRecords = await prisma.stablecoinSupply.groupBy({
+      by: ['symbol'],
+      _max: {
+        timestamp: true,
+      },
+    });
 
-  // Placeholder
-  return 142000000000; // $142B
+    // Get the actual records for those latest timestamps
+    const supplies = await Promise.all(
+      latestRecords.map(async (record) => {
+        const latest = await prisma.stablecoinSupply.findFirst({
+          where: {
+            symbol: record.symbol,
+            timestamp: record._max.timestamp!,
+          },
+          select: {
+            supply: true,
+          },
+        });
+        return latest?.supply.toNumber() || 0;
+      })
+    );
+
+    const total = supplies.reduce((sum, supply) => sum + supply, 0);
+    console.log(`✓ Total stablecoin supply: $${(total / 1e9).toFixed(2)}B`);
+    return total;
+
+  } catch (error) {
+    console.error("Error fetching total stablecoin supply:", error);
+    return 0;
+  }
 }
 
+/**
+ * Calculate supply change percentage over a given number of days
+ */
 export async function getSupplyChange(days: number): Promise<number> {
-  // TODO: Implement supply change calculation
-  // Compare current supply with supply from N days ago
-  console.log(`Calculating supply change over ${days} days...`);
+  try {
+    const now = new Date();
+    const pastDate = getDaysAgo(days);
 
-  // Placeholder
-  return days === 1 ? 0.5 : 2.3; // percentage
+    // Get current total supply
+    const currentSupply = await getTotalStablecoinSupply();
+
+    // Get supply from N days ago
+    const pastRecords = await prisma.stablecoinSupply.findMany({
+      where: {
+        timestamp: {
+          gte: pastDate,
+          lte: new Date(pastDate.getTime() + 24 * 60 * 60 * 1000), // +1 day window
+        },
+      },
+      select: {
+        symbol: true,
+        supply: true,
+      },
+    });
+
+    // Group by symbol and sum
+    const pastSupplyMap = new Map<string, number>();
+    pastRecords.forEach(record => {
+      const current = pastSupplyMap.get(record.symbol) || 0;
+      pastSupplyMap.set(record.symbol, current + record.supply.toNumber());
+    });
+
+    const pastSupply = Array.from(pastSupplyMap.values()).reduce((sum, val) => sum + val, 0);
+
+    if (pastSupply === 0) {
+      console.warn(`No supply data found for ${days} days ago`);
+      return 0;
+    }
+
+    const changePercent = ((currentSupply - pastSupply) / pastSupply) * 100;
+    console.log(`✓ Supply change (${days}d): ${changePercent.toFixed(2)}%`);
+    return changePercent;
+
+  } catch (error) {
+    console.error(`Error calculating supply change for ${days} days:`, error);
+    return 0;
+  }
 }
 
+/**
+ * Get the top stablecoins with their current supply and change metrics
+ */
 export async function getTopStablecoins(limit: number = 10): Promise<AggregatedSupply[]> {
-  // TODO: Implement query to get latest data for each stablecoin
-  console.log(`Fetching top ${limit} stablecoins...`);
+  try {
+    const majorSymbols = ["USDT", "USDC", "DAI"];
+    
+    // Get latest data for each symbol
+    const latestRecords = await prisma.stablecoinSupply.groupBy({
+      by: ['symbol'],
+      where: {
+        symbol: {
+          in: majorSymbols,
+        },
+      },
+      _max: {
+        timestamp: true,
+      },
+    });
 
-  // Placeholder
-  return [
-    {
-      symbol: "USDT",
-      totalSupply: 95000000000,
-      totalMarketCap: 95000000000,
-      changePercent24h: 0.3,
-      changePercent7d: 1.2,
-      timestamp: new Date(),
-    },
-    {
-      symbol: "USDC",
-      totalSupply: 42000000000,
-      totalMarketCap: 42000000000,
-      changePercent24h: 0.8,
-      changePercent7d: 3.1,
-      timestamp: new Date(),
-    },
-  ];
+    const stablecoins = await Promise.all(
+      latestRecords.map(async (record) => {
+        // Get current data
+        const current = await prisma.stablecoinSupply.findFirst({
+          where: {
+            symbol: record.symbol,
+            timestamp: record._max.timestamp!,
+          },
+        });
+
+        if (!current) return null;
+
+        // Get 24h ago data
+        const date24hAgo = getDaysAgo(1);
+        const data24h = await prisma.stablecoinSupply.findFirst({
+          where: {
+            symbol: record.symbol,
+            timestamp: {
+              gte: date24hAgo,
+              lte: new Date(date24hAgo.getTime() + 24 * 60 * 60 * 1000),
+            },
+          },
+          orderBy: {
+            timestamp: 'desc',
+          },
+        });
+
+        // Get 7d ago data
+        const date7dAgo = getDaysAgo(7);
+        const data7d = await prisma.stablecoinSupply.findFirst({
+          where: {
+            symbol: record.symbol,
+            timestamp: {
+              gte: date7dAgo,
+              lte: new Date(date7dAgo.getTime() + 24 * 60 * 60 * 1000),
+            },
+          },
+          orderBy: {
+            timestamp: 'desc',
+          },
+        });
+
+        const currentSupply = current.supply.toNumber();
+        const changePercent24h = data24h 
+          ? ((currentSupply - data24h.supply.toNumber()) / data24h.supply.toNumber()) * 100
+          : 0;
+        const changePercent7d = data7d
+          ? ((currentSupply - data7d.supply.toNumber()) / data7d.supply.toNumber()) * 100
+          : 0;
+
+        return {
+          symbol: current.symbol,
+          totalSupply: currentSupply,
+          totalMarketCap: current.marketCap.toNumber(),
+          changePercent24h,
+          changePercent7d,
+          timestamp: current.timestamp,
+        };
+      })
+    );
+
+    const validStablecoins = stablecoins.filter((s): s is AggregatedSupply => s !== null);
+    console.log(`✓ Fetched ${validStablecoins.length} stablecoins`);
+    return validStablecoins.slice(0, limit);
+
+  } catch (error) {
+    console.error("Error fetching top stablecoins:", error);
+    return [];
+  }
 }
 
+/**
+ * Calculate net exchange flow over a given time period
+ * Returns the net flow in USD (inflows - outflows)
+ */
 export async function getNetExchangeFlow(days: number): Promise<number> {
-  // TODO: Implement net flow calculation
-  // Sum all inflows - outflows over the time period
-  const startDate = getDaysAgo(days);
-  console.log(`Calculating net exchange flow from ${startDate}...`);
+  try {
+    const startDate = getDaysAgo(days);
 
-  // Placeholder
-  return days === 1 ? 50000000 : 200000000; // USD
+    const flows = await prisma.exchangeFlow.findMany({
+      where: {
+        timestamp: {
+          gte: startDate,
+        },
+      },
+      select: {
+        flowType: true,
+        amountUsd: true,
+      },
+    });
+
+    let netFlow = 0;
+    flows.forEach(flow => {
+      const amount = flow.amountUsd.toNumber();
+      if (flow.flowType === 'inflow') {
+        netFlow += amount;
+      } else {
+        netFlow -= amount;
+      }
+    });
+
+    console.log(`✓ Net exchange flow (${days}d): $${(netFlow / 1e6).toFixed(2)}M`);
+    return netFlow;
+
+  } catch (error) {
+    console.error(`Error calculating net exchange flow for ${days} days:`, error);
+    return 0;
+  }
 }
 
+/**
+ * Get aggregated flow data by exchange
+ */
 export async function getTopExchanges(limit: number = 10): Promise<AggregatedFlow[]> {
-  // TODO: Implement query to get aggregated flow data by exchange
-  console.log(`Fetching top ${limit} exchanges...`);
+  try {
+    const flows = await prisma.exchangeFlow.findMany({
+      where: {
+        timestamp: {
+          gte: getDaysAgo(7), // Last 7 days
+        },
+      },
+      orderBy: {
+        timestamp: 'desc',
+      },
+    });
 
-  // Placeholder
-  return [
-    {
-      exchange: "binance",
-      token: "USDT",
-      netFlow: 50000000,
-      netFlowUsd: 50000000,
-      inflowTotal: 500000000,
-      outflowTotal: 450000000,
-      timestamp: new Date(),
-    },
-  ];
+    // Aggregate by exchange and token
+    const aggregated = new Map<string, AggregatedFlow>();
+
+    flows.forEach(flow => {
+      const key = `${flow.exchange}-${flow.token}`;
+      const existing = aggregated.get(key);
+
+      if (!existing) {
+        aggregated.set(key, {
+          exchange: flow.exchange,
+          token: flow.token,
+          netFlow: 0,
+          netFlowUsd: 0,
+          inflowTotal: 0,
+          outflowTotal: 0,
+          timestamp: flow.timestamp,
+        });
+      }
+
+      const record = aggregated.get(key)!;
+      const amount = flow.amount.toNumber();
+      const amountUsd = flow.amountUsd.toNumber();
+
+      if (flow.flowType === 'inflow') {
+        record.inflowTotal += amount;
+        record.netFlow += amount;
+        record.netFlowUsd += amountUsd;
+      } else {
+        record.outflowTotal += amount;
+        record.netFlow -= amount;
+        record.netFlowUsd -= amountUsd;
+      }
+    });
+
+    const result = Array.from(aggregated.values())
+      .sort((a, b) => Math.abs(b.netFlowUsd) - Math.abs(a.netFlowUsd))
+      .slice(0, limit);
+
+    console.log(`✓ Fetched ${result.length} exchange flows`);
+    return result;
+
+  } catch (error) {
+    console.error("Error fetching top exchanges:", error);
+    return [];
+  }
 }
