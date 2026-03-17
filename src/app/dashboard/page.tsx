@@ -7,13 +7,10 @@ import {
   ContextCard,
   RecentSignals,
 } from "@/components/dashboard";
-import {
-  getTotalStablecoinSupply,
-  getSupplyChange,
-  getTopStablecoins,
-  getNetExchangeFlow,
-} from "@/lib/queries/overview";
+import { getLatestStablecoinOverview } from "@/lib/queries/overview";
+import { getStablecoinHistory } from "@/lib/queries/history";
 import { formatSupply, formatChangePercent } from "@/lib/normalization/stablecoins";
+import { StablecoinSupplyChart } from "@/components/dashboard/stablecoin-supply-chart";
 
 /**
  * Dashboard Page
@@ -21,85 +18,76 @@ import { formatSupply, formatChangePercent } from "@/lib/normalization/stablecoi
  * Main overview dashboard showing liquidity regime and key metrics.
  * Displays real-time stablecoin liquidity conditions and market signals.
  * 
- * This is a Server Component that fetches data directly from the database.
+ * This is a Server Component that uses the internal API helpers.
  */
 export default async function DashboardPage() {
-  // Fetch real data from database
-  const [
-    totalSupply,
-    supplyChange7d,
-    topStablecoins,
-    netFlow7d,
-  ] = await Promise.all([
-    getTotalStablecoinSupply(),
-    getSupplyChange(7),
-    getTopStablecoins(3),
-    getNetExchangeFlow(7),
+  // Fetch data using the same helpers as the API routes
+  const [overview, history] = await Promise.all([
+    getLatestStablecoinOverview(),
+    getStablecoinHistory("30D"),
   ]);
 
-  // Find specific stablecoins for metrics
-  const usdtData = topStablecoins.find(s => s.symbol === "USDT");
-  const usdcData = topStablecoins.find(s => s.symbol === "USDC");
-
-  // Determine regime based on supply change (simplified logic)
-  const isRiskOn = supplyChange7d > 0.5;
-  const regimeLabel = isRiskOn ? "Risk ON" : supplyChange7d < -0.5 ? "Risk OFF" : "Neutral";
-  const regimeSentiment = isRiskOn ? "positive" : supplyChange7d < -0.5 ? "negative" : "neutral";
-
-  // Calculate regime score (0-100 scale)
-  const regimeScore = Math.min(100, Math.max(0, 50 + (supplyChange7d * 10)));
+  const { metrics, stablecoin } = overview;
+  
+  // Determine sentiment from regime label
+  const regimeSentiment = 
+    metrics.liquidityRegimeLabel === "Risk ON" ? "positive" :
+    metrics.liquidityRegimeLabel === "Risk OFF" ? "negative" :
+    "neutral";
 
   // Prepare dashboard data
   const dashboardData = {
     metrics: [
       {
         label: "Liquidity Regime",
-        value: regimeLabel,
-        change: formatChangePercent(supplyChange7d),
+        value: metrics.liquidityRegimeLabel,
+        change: metrics.totalSupplyChange7d !== null ? formatChangePercent(metrics.totalSupplyChange7d) : "N/A",
         changeLabel: "vs 7d trend",
         sentiment: regimeSentiment as "positive" | "negative" | "neutral",
       },
       {
-        label: "USDT Supply (7D)",
-        value: usdtData ? formatSupply(usdtData.totalSupply) : "N/A",
-        change: usdtData ? formatChangePercent(usdtData.changePercent7d) : "N/A",
-        changeLabel: "week over week",
-        sentiment: (usdtData?.changePercent7d || 0) >= 0 ? "positive" as const : "negative" as const,
+        label: "USDT Net Mint (7D)",
+        value: metrics.usdtNetMint7d !== null ? formatSupply(Math.abs(metrics.usdtNetMint7d)) : "N/A",
+        change: metrics.usdtNetMint7d !== null ? formatChangePercent((metrics.usdtNetMint7d / (stablecoin.totalSupplyLatest || 1)) * 100) : "N/A",
+        changeLabel: "of total supply",
+        sentiment: (metrics.usdtNetMint7d || 0) >= 0 ? "positive" as const : "negative" as const,
       },
       {
-        label: "USDC Supply (7D)",
-        value: usdcData ? formatSupply(usdcData.totalSupply) : "N/A",
-        change: usdcData ? formatChangePercent(usdcData.changePercent7d) : "N/A",
-        changeLabel: "week over week",
-        sentiment: (usdcData?.changePercent7d || 0) >= 0 ? "positive" as const : "negative" as const,
+        label: "USDC Net Mint (7D)",
+        value: metrics.usdcNetMint7d !== null ? formatSupply(Math.abs(metrics.usdcNetMint7d)) : "N/A",
+        change: metrics.usdcNetMint7d !== null ? formatChangePercent((metrics.usdcNetMint7d / (stablecoin.totalSupplyLatest || 1)) * 100) : "N/A",
+        changeLabel: "of total supply",
+        sentiment: (metrics.usdcNetMint7d || 0) >= 0 ? "positive" as const : "negative" as const,
       },
       {
         label: "Exchange Netflow (7D)",
-        value: netFlow7d !== 0 ? `${netFlow7d >= 0 ? '+' : ''}$${(Math.abs(netFlow7d) / 1e6).toFixed(0)}M` : "N/A",
-        change: netFlow7d < 0 ? "Outflow (bullish)" : "Inflow",
-        sentiment: netFlow7d < 0 ? "positive" as const : "neutral" as const,
+        value: metrics.exchangeNetflow !== null ? `$${(Math.abs(metrics.exchangeNetflow) / 1e6).toFixed(0)}M` : "Pending",
+        change: metrics.exchangeNetflow !== null && metrics.exchangeNetflow < 0 ? "Outflow (bullish)" : "Not implemented",
+        sentiment: "neutral" as const,
       },
     ],
     regime: {
-      regime: regimeLabel,
-      score: Math.round(regimeScore),
-      change: `${supplyChange7d >= 0 ? '+' : ''}${supplyChange7d.toFixed(1)}% vs 7d ago`,
+      regime: metrics.liquidityRegimeLabel,
+      score: metrics.liquidityRegimeScore !== null ? Math.round(metrics.liquidityRegimeScore) : 50,
+      change: metrics.totalSupplyChange7d !== null 
+        ? `${metrics.totalSupplyChange7d >= 0 ? '+' : ''}${metrics.totalSupplyChange7d.toFixed(1)}% vs 7d ago`
+        : "N/A",
       description:
         "Composite signal based on stablecoin supply growth. Expanding supply typically indicates risk-on conditions.",
       signals: [
         { 
           label: "Stablecoin Growth", 
-          value: supplyChange7d > 1 ? "Strong" : supplyChange7d > 0 ? "Moderate" : "Contracting", 
-          sentiment: supplyChange7d > 0 ? "positive" as const : "negative" as const 
+          value: (metrics.totalSupplyChange7d || 0) > 1 ? "Strong" : (metrics.totalSupplyChange7d || 0) > 0 ? "Moderate" : "Contracting", 
+          sentiment: (metrics.totalSupplyChange7d || 0) > 0 ? "positive" as const : "negative" as const 
         },
         { 
           label: "Exchange Flow", 
-          value: netFlow7d < 0 ? "Outflow (bullish)" : "Inflow", 
-          sentiment: netFlow7d < 0 ? "positive" as const : "neutral" as const 
+          value: "Pending implementation", 
+          sentiment: "neutral" as const 
         },
         { 
           label: "Total Supply", 
-          value: formatSupply(totalSupply), 
+          value: stablecoin.totalSupplyLatest !== null ? formatSupply(stablecoin.totalSupplyLatest) : "N/A", 
           sentiment: "neutral" as const 
         },
       ],
@@ -108,9 +96,9 @@ export default async function DashboardPage() {
       title: "Signal Summary",
       description: "Fast read of current regime drivers.",
       signals: [
-        { text: supplyChange7d > 0 ? "Stablecoin supply expanding" : "Stablecoin supply contracting" },
-        { text: netFlow7d < 0 ? "Net outflow from exchanges (bullish)" : "Net inflow to exchanges" },
-        { text: `Total supply: ${formatSupply(totalSupply)}` },
+        { text: (metrics.totalSupplyChange7d || 0) > 0 ? "Stablecoin supply expanding" : "Stablecoin supply contracting" },
+        { text: "Exchange flow tracking: Pending implementation" },
+        { text: stablecoin.totalSupplyLatest !== null ? `Total supply: ${formatSupply(stablecoin.totalSupplyLatest)}` : "No data" },
       ],
     },
     btcContext: {
@@ -134,26 +122,26 @@ export default async function DashboardPage() {
       description: "Latest observations from the liquidity monitor.",
       signals: [
         { 
-          text: supplyChange7d > 1 ? "Strong stablecoin expansion detected" : "Moderate supply growth", 
+          text: (metrics.totalSupplyChange7d || 0) > 1 ? "Strong stablecoin expansion detected" : "Moderate supply growth", 
           time: "Updated", 
-          sentiment: supplyChange7d > 0 ? "positive" as const : "neutral" as const 
+          sentiment: (metrics.totalSupplyChange7d || 0) > 0 ? "positive" as const : "neutral" as const 
         },
         { 
-          text: netFlow7d < -100_000_000 ? "Significant exchange outflows" : "Exchange flows stable", 
-          time: "7d avg", 
-          sentiment: netFlow7d < 0 ? "positive" as const : "neutral" as const 
+          text: "Exchange flow monitoring: Coming soon", 
+          time: "Pending", 
+          sentiment: "neutral" as const 
         },
       ],
     },
   };
 
   // Calculate last updated time
-  const lastUpdated = topStablecoins.length > 0 
-    ? new Date(topStablecoins[0].timestamp).toLocaleString()
+  const lastUpdated = stablecoin.lastUpdated 
+    ? new Date(stablecoin.lastUpdated).toLocaleString()
     : "No data";
 
   // Determine if we have data
-  const hasData = totalSupply > 0;
+  const hasData = stablecoin.totalSupplyLatest !== null && stablecoin.totalSupplyLatest > 0;
 
   return (
     <>
@@ -183,7 +171,7 @@ export default async function DashboardPage() {
                   : regimeSentiment === "negative"
                   ? "text-negative"
                   : "text-foreground"
-              }`}>{regimeLabel}</span>
+              }`}>{metrics.liquidityRegimeLabel}</span>
             </div>
             <div className="flex items-center gap-xs rounded-lg border border-border/40 bg-surface px-md py-xs shadow-sm">
               <div className={`h-2 w-2 rounded-full ${hasData ? "bg-positive" : "bg-negative"}`}></div>
@@ -228,18 +216,21 @@ export default async function DashboardPage() {
 
         {/* Chart Panels */}
         <div className="grid grid-cols-1 gap-md lg:grid-cols-2">
-          <ChartPanel
-            title="Stablecoin Supply Trend"
-            description="Aggregate and major-issuer supply expansion over time."
-            timeframes={["7D", "30D", "90D"]}
+          <StablecoinSupplyChart 
+            data={history.stablecoinSupplyTrend}
             isEmpty={!hasData}
           />
           <ChartPanel
             title="Exchange Netflows"
             description="Monitor risk appetite through exchange inflow behavior."
             timeframes={["Spot + Major CEX"]}
-            isEmpty={!hasData}
-          />
+            isEmpty={true}
+          >
+            <div className="flex flex-col items-center justify-center h-full">
+              <p className="text-sm text-foreground-muted">Exchange flow tracking</p>
+              <p className="text-xs text-foreground-subtle mt-xs">Coming in future update</p>
+            </div>
+          </ChartPanel>
         </div>
 
         {/* Supporting Panels */}

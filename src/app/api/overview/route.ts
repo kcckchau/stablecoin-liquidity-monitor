@@ -1,67 +1,42 @@
 import { NextResponse } from "next/server";
-import type { ApiResponse, OverviewResponse } from "@/types/api";
-import {
-  getTotalStablecoinSupply,
-  getSupplyChange,
-  getTopStablecoins,
-  getNetExchangeFlow,
-  getTopExchanges,
-} from "@/lib/queries/overview";
+import { getLatestStablecoinOverview } from "@/lib/queries/overview";
 
+/**
+ * GET /api/overview
+ * Returns latest stablecoin overview metrics
+ */
 export async function GET() {
   try {
-    // Fetch all overview data
-    const [
-      totalStablecoinSupply,
-      supplyChange24h,
-      supplyChange7d,
-      topStablecoins,
-      netExchangeFlow24h,
-      netExchangeFlow7d,
-      topExchanges,
-    ] = await Promise.all([
-      getTotalStablecoinSupply(),
-      getSupplyChange(1),
-      getSupplyChange(7),
-      getTopStablecoins(10),
-      getNetExchangeFlow(1),
-      getNetExchangeFlow(7),
-      getTopExchanges(10),
-    ]);
+    const data = await getLatestStablecoinOverview();
 
-    const response: ApiResponse<OverviewResponse> = {
-      data: {
-        totalStablecoinSupply,
-        supplyChange24h,
-        supplyChange7d,
-        topStablecoins,
-        netExchangeFlow24h,
-        netExchangeFlow7d,
-        topExchanges,
-      },
+    return NextResponse.json({
+      ...data,
       timestamp: new Date().toISOString(),
       success: true,
-    };
-
-    return NextResponse.json(response);
+    });
   } catch (error) {
     console.error("Error fetching overview data:", error);
 
-    const response: ApiResponse<OverviewResponse> = {
-      data: {
-        totalStablecoinSupply: 0,
-        supplyChange24h: 0,
-        supplyChange7d: 0,
-        topStablecoins: [],
-        netExchangeFlow24h: 0,
-        netExchangeFlow7d: 0,
-        topExchanges: [],
+    return NextResponse.json(
+      {
+        metrics: {
+          usdtNetMint7d: null,
+          usdcNetMint7d: null,
+          totalSupplyChange7d: null,
+          liquidityRegimeLabel: "Error",
+          liquidityRegimeScore: null,
+          exchangeNetflow: null,
+        },
+        stablecoin: {
+          totalSupplyLatest: null,
+          totalSupply7dAgo: null,
+          lastUpdated: null,
+        },
+        timestamp: new Date().toISOString(),
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
       },
-      timestamp: new Date().toISOString(),
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-
-    return NextResponse.json(response, { status: 500 });
+      { status: 500 }
+    );
   }
 }

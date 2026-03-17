@@ -84,8 +84,8 @@ export async function getSupplyHistory(days: number = 30): Promise<SupplyHistory
       },
     });
 
-    // Group by date (day granularity)
-    const dailyMap = new Map<string, Map<string, number>>();
+    // Group by date (day granularity) - take LATEST record per symbol per day
+    const dailyMap = new Map<string, Map<string, {supply: number, timestamp: Date}>>();
 
     supplies.forEach(record => {
       const dateKey = record.timestamp.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -95,17 +95,24 @@ export async function getSupplyHistory(days: number = 30): Promise<SupplyHistory
       }
       
       const dayData = dailyMap.get(dateKey)!;
-      const currentSupply = dayData.get(record.symbol) || 0;
-      dayData.set(record.symbol, currentSupply + record.supply.toNumber());
+      const existing = dayData.get(record.symbol);
+      
+      // Only keep the latest record for each symbol per day
+      if (!existing || record.timestamp > existing.timestamp) {
+        dayData.set(record.symbol, {
+          supply: record.supply.toNumber(),
+          timestamp: record.timestamp
+        });
+      }
     });
 
     // Convert to array format
     const history: SupplyHistoryPoint[] = [];
     dailyMap.forEach((symbolMap, dateKey) => {
-      const totalSupply = Array.from(symbolMap.values()).reduce((sum, val) => sum + val, 0);
+      const totalSupply = Array.from(symbolMap.values()).reduce((sum, item) => sum + item.supply, 0);
       const bySymbol: Record<string, number> = {};
-      symbolMap.forEach((supply, symbol) => {
-        bySymbol[symbol] = supply;
+      symbolMap.forEach((item, symbol) => {
+        bySymbol[symbol] = item.supply;
       });
 
       history.push({
@@ -184,6 +191,35 @@ export async function getFlowHistory(days: number = 30): Promise<FlowHistoryPoin
     console.error("Error fetching flow history:", error);
     return [];
   }
+}
+
+/**
+ * Get stablecoin history with range parameter
+ * Converts range string (7D, 30D, 90D) to days and returns formatted data for API
+ */
+export async function getStablecoinHistory(range: "7D" | "30D" | "90D") {
+  const rangeToDays = {
+    "7D": 7,
+    "30D": 30,
+    "90D": 90,
+  };
+
+  const days = rangeToDays[range];
+  const supplyHistory = await getSupplyHistory(days);
+
+  // Convert to API format
+  const stablecoinSupplyTrend = supplyHistory.map(point => ({
+    date: point.timestamp,
+    usdt: point.bySymbol?.USDT || 0,
+    usdc: point.bySymbol?.USDC || 0,
+    dai: point.bySymbol?.DAI || 0,
+    total: point.totalSupply,
+  }));
+
+  return {
+    range,
+    stablecoinSupplyTrend,
+  };
 }
 
 /**

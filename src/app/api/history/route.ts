@@ -1,48 +1,40 @@
 import { NextResponse } from "next/server";
-import type { ApiResponse, HistoryResponse } from "@/types/api";
-import {
-  getRegimeHistory,
-  getSupplyHistory,
-  getFlowHistory,
-} from "@/lib/queries/history";
+import { getStablecoinHistory } from "@/lib/queries/history";
 
+/**
+ * GET /api/history?range=7D|30D|90D
+ * Returns historical stablecoin supply data
+ */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const days = parseInt(searchParams.get("days") || "30", 10);
+    const rangeParam = searchParams.get("range") || "30D";
+    
+    // Validate range parameter
+    const validRanges = ["7D", "30D", "90D"];
+    const range = validRanges.includes(rangeParam) 
+      ? (rangeParam as "7D" | "30D" | "90D")
+      : "30D";
 
-    // Fetch historical data
-    const [regimeHistory, supplyHistory, flowHistory] = await Promise.all([
-      getRegimeHistory(days),
-      getSupplyHistory(days),
-      getFlowHistory(days),
-    ]);
+    const data = await getStablecoinHistory(range);
 
-    const response: ApiResponse<HistoryResponse> = {
-      data: {
-        regimeHistory,
-        supplyHistory,
-        flowHistory,
-      },
+    return NextResponse.json({
+      ...data,
       timestamp: new Date().toISOString(),
       success: true,
-    };
-
-    return NextResponse.json(response);
+    });
   } catch (error) {
     console.error("Error fetching history data:", error);
 
-    const response: ApiResponse<HistoryResponse> = {
-      data: {
-        regimeHistory: [],
-        supplyHistory: [],
-        flowHistory: [],
+    return NextResponse.json(
+      {
+        range: "30D",
+        stablecoinSupplyTrend: [],
+        timestamp: new Date().toISOString(),
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
       },
-      timestamp: new Date().toISOString(),
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-
-    return NextResponse.json(response, { status: 500 });
+      { status: 500 }
+    );
   }
 }

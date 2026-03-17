@@ -226,6 +226,89 @@ export async function getNetExchangeFlow(days: number): Promise<number> {
 }
 
 /**
+ * Get latest stablecoin overview data for the API
+ * Returns structured data matching the /api/overview spec
+ */
+export async function getLatestStablecoinOverview() {
+  try {
+    const [totalSupply, supplyChange7d, topStablecoins] = await Promise.all([
+      getTotalStablecoinSupply(),
+      getSupplyChange(7),
+      getTopStablecoins(3),
+    ]);
+
+    // Get supply from 7 days ago
+    const pastDate = getDaysAgo(7);
+    const pastRecords = await prisma.stablecoinSupply.findMany({
+      where: {
+        timestamp: {
+          gte: pastDate,
+          lte: new Date(pastDate.getTime() + 24 * 60 * 60 * 1000),
+        },
+      },
+      select: {
+        symbol: true,
+        supply: true,
+      },
+    });
+
+    const pastSupplyMap = new Map<string, number>();
+    pastRecords.forEach(record => {
+      const current = pastSupplyMap.get(record.symbol) || 0;
+      pastSupplyMap.set(record.symbol, Math.max(current, record.supply.toNumber()));
+    });
+
+    const totalSupply7dAgo = Array.from(pastSupplyMap.values()).reduce((sum, val) => sum + val, 0);
+
+    // Find USDT and USDC for net mint calculations
+    const usdtData = topStablecoins.find(s => s.symbol === "USDT");
+    const usdcData = topStablecoins.find(s => s.symbol === "USDC");
+
+    // Calculate net mint (7d change in supply)
+    const usdtNetMint7d = usdtData 
+      ? (usdtData.totalSupply * usdtData.changePercent7d / 100)
+      : null;
+    
+    const usdcNetMint7d = usdcData
+      ? (usdcData.totalSupply * usdcData.changePercent7d / 100)
+      : null;
+
+    // Simple regime calculation based on supply change
+    const liquidityRegimeLabel = supplyChange7d > 0.5 
+      ? "Risk ON" 
+      : supplyChange7d < -0.5 
+      ? "Risk OFF" 
+      : "Neutral";
+    
+    const liquidityRegimeScore = Math.min(100, Math.max(0, 50 + (supplyChange7d * 10)));
+
+    // Get last update timestamp
+    const lastUpdated = topStablecoins.length > 0 
+      ? topStablecoins[0].timestamp.toISOString()
+      : null;
+
+    return {
+      metrics: {
+        usdtNetMint7d,
+        usdcNetMint7d,
+        totalSupplyChange7d: supplyChange7d,
+        liquidityRegimeLabel,
+        liquidityRegimeScore,
+        exchangeNetflow: null, // Not implemented yet
+      },
+      stablecoin: {
+        totalSupplyLatest: totalSupply,
+        totalSupply7dAgo: totalSupply7dAgo || null,
+        lastUpdated,
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching latest stablecoin overview:", error);
+    throw error;
+  }
+}
+
+/**
  * Get aggregated flow data by exchange
  */
 export async function getTopExchanges(limit: number = 10): Promise<AggregatedFlow[]> {

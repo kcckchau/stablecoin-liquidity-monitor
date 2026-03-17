@@ -40,11 +40,37 @@ export async function GET(request: Request) {
     // Normalize data to internal format
     const normalizedData = normalizeDefiLlamaData(rawData);
 
-    // Store in database
+    // Store in database (with duplicate prevention)
     const insertedRecords = [];
+    const skippedRecords = [];
+    
     for (const item of normalizedData) {
       try {
         const prismaData = toPrismaFormat(item);
+        
+        // Check if a record already exists for this symbol within the same hour
+        // This prevents duplicate inserts if the cron runs multiple times
+        const hourStart = new Date(prismaData.timestamp);
+        hourStart.setMinutes(0, 0, 0);
+        const hourEnd = new Date(hourStart);
+        hourEnd.setHours(hourEnd.getHours() + 1);
+        
+        const existing = await prisma.stablecoinSupply.findFirst({
+          where: {
+            symbol: prismaData.symbol,
+            timestamp: {
+              gte: hourStart,
+              lt: hourEnd,
+            },
+          },
+        });
+        
+        if (existing) {
+          console.log(`⏭️  Skipping ${item.symbol}: record already exists for this hour`);
+          skippedRecords.push(item.symbol);
+          continue;
+        }
+        
         const record = await prisma.stablecoinSupply.create({
           data: prismaData,
         });
@@ -56,11 +82,12 @@ export async function GET(request: Request) {
     }
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Successfully stored ${insertedRecords.length}/${normalizedData.length} stablecoin records in ${duration}ms`);
+    console.log(`✅ Inserted: ${insertedRecords.length}, Skipped: ${skippedRecords.length}/${normalizedData.length} in ${duration}ms`);
 
     return NextResponse.json({
       success: true,
-      count: insertedRecords.length,
+      inserted: insertedRecords.length,
+      skipped: skippedRecords.length,
       total: normalizedData.length,
       duration: `${duration}ms`,
       timestamp: new Date().toISOString(),
@@ -69,6 +96,7 @@ export async function GET(request: Request) {
         supply: r.supply.toString(),
         timestamp: r.timestamp.toISOString(),
       })),
+      skippedSymbols: skippedRecords,
     });
 
   } catch (error) {
