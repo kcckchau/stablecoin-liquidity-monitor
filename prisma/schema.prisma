@@ -58,3 +58,20 @@ model LiquidityRegime {
   @@index([timestamp])
   @@index([regime, timestamp])
 }
+
+model FredData {
+  id              String   @id @default(cuid())
+  seriesId        String   // e.g., "RRPONTSYD", "WTREGEN"
+  date            DateTime // Observation date
+  value           Decimal  @db.Decimal(20, 2) // Value (scale depends on series)
+  units           String   // e.g., "Billions of Dollars", "Millions of Dollars"
+  realtimeStart   DateTime // When this value was first recorded
+  realtimeEnd     DateTime // When this value was last updated
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([seriesId, date])
+  @@index([seriesId, date])
+  @@index([date])
+  @@index([seriesId])
+}

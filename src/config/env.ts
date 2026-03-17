@@ -7,6 +7,7 @@ export const env = {
   DEFILLAMA_API_KEY: process.env.DEFILLAMA_API_KEY || "",
   CRYPTOQUANT_API_KEY: process.env.CRYPTOQUANT_API_KEY || "",
   GLASSNODE_API_KEY: process.env.GLASSNODE_API_KEY || "",
+  FRED_API_KEY: process.env.FRED_API_KEY || "",
 
   // Cron secret for Vercel
   CRON_SECRET: process.env.CRON_SECRET || "",
