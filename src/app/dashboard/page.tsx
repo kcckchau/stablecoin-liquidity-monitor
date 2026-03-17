@@ -6,11 +6,10 @@ import {
   ChartPanel,
   ContextCard,
   RecentSignals,
+  StablecoinSupplyChart,
 } from "@/components/dashboard";
 import { getLatestStablecoinOverview } from "@/lib/queries/overview";
-import { getStablecoinHistory } from "@/lib/queries/history";
 import { formatSupply, formatChangePercent } from "@/lib/normalization/stablecoins";
-import { StablecoinSupplyChart } from "@/components/dashboard/stablecoin-supply-chart";
 
 /**
  * Dashboard Page
@@ -21,11 +20,8 @@ import { StablecoinSupplyChart } from "@/components/dashboard/stablecoin-supply-
  * This is a Server Component that uses the internal API helpers.
  */
 export default async function DashboardPage() {
-  // Fetch data using the same helpers as the API routes
-  const [overview, history] = await Promise.all([
-    getLatestStablecoinOverview(),
-    getStablecoinHistory("30D"),
-  ]);
+  // Fetch overview data (chart fetches its own data client-side)
+  const overview = await getLatestStablecoinOverview();
 
   const { metrics, stablecoin } = overview;
   
@@ -216,10 +212,7 @@ export default async function DashboardPage() {
 
         {/* Chart Panels */}
         <div className="grid grid-cols-1 gap-md lg:grid-cols-2">
-          <StablecoinSupplyChart 
-            data={history.stablecoinSupplyTrend}
-            isEmpty={!hasData}
-          />
+          <StablecoinSupplyChart />
           <ChartPanel
             title="Exchange Netflows"
             description="Monitor risk appetite through exchange inflow behavior."
