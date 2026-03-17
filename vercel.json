@@ -9,6 +9,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/fetch-fred",
+      "schedule": "0 0 * * *"
+    },
+    {
       "path": "/api/cron/compute-regime",
       "schedule": "15 * * * *"
     }

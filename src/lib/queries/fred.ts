@@ -252,3 +252,41 @@ export async function getFredStatistics(
     earliest: observations[0],
   };
 }
+
+/**
+ * Get FRED overview data for dashboard
+ * 
+ * Fetches latest RRP and TGA values with 7-day and 30-day changes
+ * 
+ * @returns Overview data for all FRED series
+ */
+export async function getFredOverview() {
+  const { FRED_SERIES } = await import("@/lib/constants/fred-series");
+
+  // Fetch latest and changes for both series
+  const [rrpLatest, rrpChange7d, rrpChange30d, tgaLatest, tgaChange7d, tgaChange30d] =
+    await Promise.all([
+      getLatestFredObservation(FRED_SERIES.RRP),
+      getFredChangeOverPeriod(FRED_SERIES.RRP, 7),
+      getFredChangeOverPeriod(FRED_SERIES.RRP, 30),
+      getLatestFredObservation(FRED_SERIES.TGA),
+      getFredChangeOverPeriod(FRED_SERIES.TGA, 7),
+      getFredChangeOverPeriod(FRED_SERIES.TGA, 30),
+    ]);
+
+  return {
+    rrp: {
+      latest: rrpLatest,
+      change7d: rrpChange7d?.change || null,
+      change30d: rrpChange30d?.change || null,
+      lastUpdated: rrpLatest?.date.toISOString() || null,
+    },
+    tga: {
+      latest: tgaLatest,
+      change7d: tgaChange7d?.change || null,
+      change30d: tgaChange30d?.change || null,
+      lastUpdated: tgaLatest?.date.toISOString() || null,
+    },
+    hasData: !!(rrpLatest || tgaLatest),
+  };
+}

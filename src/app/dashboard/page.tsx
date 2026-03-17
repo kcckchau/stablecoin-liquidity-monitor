@@ -9,7 +9,9 @@ import {
   StablecoinSupplyChart,
 } from "@/components/dashboard";
 import { getLatestStablecoinOverview } from "@/lib/queries/overview";
+import { getFredOverview } from "@/lib/queries/fred";
 import { formatSupply, formatChangePercent } from "@/lib/normalization/stablecoins";
+import { formatFredValue } from "@/lib/normalization/fred";
 
 /**
  * Dashboard Page
@@ -21,7 +23,10 @@ import { formatSupply, formatChangePercent } from "@/lib/normalization/stablecoi
  */
 export default async function DashboardPage() {
   // Fetch overview data (chart fetches its own data client-side)
-  const overview = await getLatestStablecoinOverview();
+  const [overview, fredData] = await Promise.all([
+    getLatestStablecoinOverview(),
+    getFredOverview().catch(() => ({ rrp: { latest: null, change7d: null, change30d: null, lastUpdated: null }, tga: { latest: null, change7d: null, change30d: null, lastUpdated: null }, hasData: false })),
+  ]);
 
   const { metrics, stablecoin } = overview;
   
@@ -61,6 +66,20 @@ export default async function DashboardPage() {
         change: metrics.exchangeNetflow !== null && metrics.exchangeNetflow < 0 ? "Outflow (bullish)" : "Not implemented",
         sentiment: "neutral" as const,
       },
+      {
+        label: "Reverse Repo (RRP)",
+        value: fredData.rrp.latest ? formatFredValue(fredData.rrp.latest.value, fredData.rrp.latest.units) : "N/A",
+        change: fredData.rrp.change7d ? `${fredData.rrp.change7d.percent >= 0 ? '+' : ''}${fredData.rrp.change7d.percent.toFixed(1)}% (7D)` : "N/A",
+        changeLabel: "High RRP = High liquidity",
+        sentiment: fredData.rrp.change7d ? (fredData.rrp.change7d.direction === "increase" ? "positive" as const : fredData.rrp.change7d.direction === "decrease" ? "negative" as const : "neutral" as const) : "neutral" as const,
+      },
+      {
+        label: "Treasury General Account",
+        value: fredData.tga.latest ? formatFredValue(fredData.tga.latest.value, fredData.tga.latest.units) : "N/A",
+        change: fredData.tga.change7d ? `${fredData.tga.change7d.percent >= 0 ? '+' : ''}${fredData.tga.change7d.percent.toFixed(1)}% (7D)` : "N/A",
+        changeLabel: "Rising TGA = Liquidity drain",
+        sentiment: fredData.tga.change7d ? (fredData.tga.change7d.direction === "decrease" ? "positive" as const : fredData.tga.change7d.direction === "increase" ? "negative" as const : "neutral" as const) : "neutral" as const,
+      },
     ],
     regime: {
       regime: metrics.liquidityRegimeLabel,
@@ -69,7 +88,7 @@ export default async function DashboardPage() {
         ? `${metrics.totalSupplyChange7d >= 0 ? '+' : ''}${metrics.totalSupplyChange7d.toFixed(1)}% vs 7d ago`
         : "N/A",
       description:
-        "Composite signal based on stablecoin supply growth. Expanding supply typically indicates risk-on conditions.",
+        "Composite signal based on stablecoin supply growth and Fed macro liquidity indicators (RRP, TGA). Expanding supply + high RRP + falling TGA typically indicates risk-on conditions.",
       signals: [
         { 
           label: "Stablecoin Growth", 
@@ -77,14 +96,14 @@ export default async function DashboardPage() {
           sentiment: (metrics.totalSupplyChange7d || 0) > 0 ? "positive" as const : "negative" as const 
         },
         { 
-          label: "Exchange Flow", 
-          value: "Pending implementation", 
-          sentiment: "neutral" as const 
+          label: "RRP Liquidity", 
+          value: fredData.rrp.latest ? formatFredValue(fredData.rrp.latest.value, "Billions") : "N/A", 
+          sentiment: fredData.rrp.change7d ? (fredData.rrp.change7d.direction === "increase" ? "positive" as const : "negative" as const) : "neutral" as const 
         },
         { 
-          label: "Total Supply", 
-          value: stablecoin.totalSupplyLatest !== null ? formatSupply(stablecoin.totalSupplyLatest) : "N/A", 
-          sentiment: "neutral" as const 
+          label: "TGA Balance", 
+          value: fredData.tga.latest ? formatFredValue(fredData.tga.latest.value, "Millions") : "N/A", 
+          sentiment: fredData.tga.change7d ? (fredData.tga.change7d.direction === "decrease" ? "positive" as const : "negative" as const) : "neutral" as const 
         },
       ],
     },
@@ -93,8 +112,8 @@ export default async function DashboardPage() {
       description: "Fast read of current regime drivers.",
       signals: [
         { text: (metrics.totalSupplyChange7d || 0) > 0 ? "Stablecoin supply expanding" : "Stablecoin supply contracting" },
-        { text: "Exchange flow tracking: Pending implementation" },
-        { text: stablecoin.totalSupplyLatest !== null ? `Total supply: ${formatSupply(stablecoin.totalSupplyLatest)}` : "No data" },
+        { text: fredData.rrp.latest ? `RRP at ${formatFredValue(fredData.rrp.latest.value, "Billions")} (${fredData.rrp.change7d?.direction || "stable"})` : "RRP data pending" },
+        { text: fredData.tga.latest ? `TGA at ${formatFredValue(fredData.tga.latest.value, "Millions")} (${fredData.tga.change7d?.direction || "stable"})` : "TGA data pending" },
       ],
     },
     btcContext: {
@@ -122,11 +141,16 @@ export default async function DashboardPage() {
           time: "Updated", 
           sentiment: (metrics.totalSupplyChange7d || 0) > 0 ? "positive" as const : "neutral" as const 
         },
-        { 
-          text: "Exchange flow monitoring: Coming soon", 
-          time: "Pending", 
-          sentiment: "neutral" as const 
-        },
+        ...(fredData.rrp.latest ? [{ 
+          text: `RRP ${fredData.rrp.change7d?.direction || "stable"}: ${formatFredValue(fredData.rrp.latest.value, "Billions")}`, 
+          time: new Date(fredData.rrp.lastUpdated || "").toLocaleDateString(), 
+          sentiment: fredData.rrp.change7d?.direction === "increase" ? "positive" as const : "neutral" as const 
+        }] : []),
+        ...(fredData.tga.latest ? [{ 
+          text: `TGA ${fredData.tga.change7d?.direction || "stable"}: ${formatFredValue(fredData.tga.latest.value, "Millions")}`, 
+          time: new Date(fredData.tga.lastUpdated || "").toLocaleDateString(), 
+          sentiment: fredData.tga.change7d?.direction === "decrease" ? "positive" as const : "neutral" as const 
+        }] : []),
       ],
     },
   };
