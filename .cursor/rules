@@ -1,5 +1,7 @@
 # Cursor Project Rules
 
+Use pnpm only
+
 Use docs/README.md as the entry point for project context.
 
 Always follow docs/tasks.md when implementing features.
@@ -26,4 +28,3 @@ Keep styling consistent with the defined design tokens.
 
 Do not add extra features outside the current task.
 
-Use pnpm

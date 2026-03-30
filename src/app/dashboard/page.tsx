@@ -7,11 +7,13 @@ import {
   ContextCard,
   RecentSignals,
   StablecoinSupplyChart,
+  LiquidityInsight,
 } from "@/components/dashboard";
 import { getLatestStablecoinOverview } from "@/lib/queries/overview";
 import { getFredOverview } from "@/lib/queries/fred";
 import { formatSupply, formatChangePercent } from "@/lib/normalization/stablecoins";
 import { formatFredValue } from "@/lib/normalization/fred";
+import { generateLiquidityInsight } from "@/lib/insight-engine/generateInsight";
 
 /**
  * Dashboard Page
@@ -29,7 +31,15 @@ export default async function DashboardPage() {
   ]);
 
   const { metrics, stablecoin } = overview;
-  
+
+  // Generate structured liquidity insight from available data
+  const insight = generateLiquidityInsight({
+    usdt7d: metrics.usdtChange7d,
+    usdc7d: metrics.usdcChange7d,
+    rrpChange7d: fredData.rrp.change7d?.percent ?? null,
+    tgaChange7d: fredData.tga.change7d?.percent ?? null,
+  });
+
   // Determine sentiment from regime label
   const regimeSentiment = 
     metrics.liquidityRegimeLabel === "Risk ON" ? "positive" :
@@ -233,6 +243,9 @@ export default async function DashboardPage() {
             <SignalSummary {...dashboardData.signalSummary} />
           </div>
         </div>
+
+        {/* Liquidity Insight */}
+        <LiquidityInsight insight={insight} />
 
         {/* Chart Panels */}
         <div className="grid grid-cols-1 gap-md lg:grid-cols-2">

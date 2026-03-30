@@ -291,6 +291,8 @@ export async function getLatestStablecoinOverview() {
       metrics: {
         usdtNetMint7d,
         usdcNetMint7d,
+        usdtChange7d: usdtData?.changePercent7d ?? null,
+        usdcChange7d: usdcData?.changePercent7d ?? null,
         totalSupplyChange7d: supplyChange7d,
         liquidityRegimeLabel,
         liquidityRegimeScore,
